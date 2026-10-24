@@ -2,7 +2,40 @@
 
 A calm, live command map for T3 Code. Read conversations and steer the team without leaving the map. T3 remains the engine for agents, delegation, council, scheduling and approvals.
 
-## Run it
+![T3 Map in motion with fictional demo projects](docs/demo-motion.gif)
+
+*Preview uses fictional demo data. Projects, repositories, conversations and decisions are simulated.*
+
+<details>
+<summary>Static screenshot</summary>
+
+![T3 Map preview with fictional demo projects](docs/desktop-preview.jpg)
+
+</details>
+
+## Desktop app (Windows)
+
+The Tauri desktop app includes the Node runtime and the existing map. It starts its own local bridge and stops it when the app exits. T3 Code must still be installed and running for live projects; demo mode never connects to it.
+
+To build locally, install Node 22 or later, Rust with the Windows MSVC build tools, and WebView2, then run:
+
+```powershell
+npm ci
+npm run desktop:build
+```
+
+The Windows installer is written to `src-tauri/target/release/bundle/nsis/`. The installed app does not need a separate Node installation. The build bundles the Node executable used to run the preparation script, together with its license notices.
+
+For development, run `npm run desktop:dev`. To try it with fictional projects:
+
+```powershell
+$env:T3_MAP_DEMO = '1'
+npm run desktop:dev
+```
+
+Desktop packaging currently targets Windows. The browser version remains available:
+
+## Run in a browser
 
 ```powershell
 npm start            # http://127.0.0.1:4773
@@ -39,7 +72,7 @@ The Boss and Managers are ordinary T3 threads with a short written brief. T3 doe
 - **Team tab → Set up a Boss.** Start a new thread (pick a starred agent; Opus is recommended) or promote an existing one. It gets the Boss brief and is pinned in T3. The Boss sits at the centre of the map with You above it.
 - **Assign a Manager per project.** Start one (Codex recommended) or promote an existing thread from that project. Its avatar sits on the project node; its workers fan out under the project.
 - **Autonomy per project:** Cautious, Normal (default) or Bold. Changing it sends the Manager a one-line update.
-- **Escalation ladder.** Workers ask their Manager. Managers decide within their autonomy and escalate the rest to the Boss with a message starting `Decision needed:`. The Boss asks you only for high-impact calls. Needs-you items show the path, e.g. "dzdistro Manager → Boss → You", and the Boss's questions are listed first.
+- **Decision rights.** Role briefs read `~/.t3-map/policy.md`; place your decision policy there before setting up the team. It overrides autonomy levels. Workers ask their Manager; `Decision:` is a timed heads-up to the Boss, while `Decision needed (user):` requires explicit user approval. Needs-you items show the path, e.g. "Clover Market Manager → Boss → You", and the Boss's questions are listed first.
 - **Tell the team** messages the Boss by default, or the project's Manager when you're zoomed into a project. Tick "Start a separate thread instead" in options for one-off work.
 - Merging, deploying and deleting stay yours: every brief says so, and the map has no button for them.
 
@@ -70,7 +103,10 @@ To revoke access, use `t3 auth session list`, then `t3 auth session revoke <id>`
 
 ```powershell
 npm test
+npm run desktop:test   # Windows: prepare bundled files and run Rust checks
 ```
+
+Desktop checks cover independent bridge ports, origin validation, parent-exit cleanup, navigation restrictions, and Windows path handling. Native window interaction remains a manual acceptance step.
 
 The checks cover state/event mapping, conversation projection, safe Markdown, RPC success/failure/timeout behavior, and the HTTP demo flows with the same validation used for live actions. Browser acceptance covered question answers, denial with feedback, plan acceptance, replies, changes, new work with agent/worktree choices, stop, settle and draft retention; desktop dark/light and 390px layouts were inspected. Live checks read real conversations, starred agents and checkpoint diffs. Command schemas were checked against T3 using a nonexistent thread, so no real work was altered for that check.
 Image checks cover two same-named files with distinct inline positions/bindings, image-only messages, protected previews, invalid uploads and cross-origin rejection. Browser checks exercised attachment input, the paste event, two-image sending, new-work images, preview/close and draft retention. Live upload/read/delete preserved the exact bytes of a real screenshot, and image send/launch payloads reached the expected nonexistent-thread/project rejection. No real agent was started for those transport checks.

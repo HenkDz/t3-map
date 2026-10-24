@@ -15,6 +15,9 @@ import { diffThread, normalizeProject, normalizeThread, providerName, modelName 
 
 const DEMO = process.env.T3_MAP_DEMO === "1";
 const PORT = Number(process.env.T3_MAP_PORT || (DEMO ? 4774 : 4773));
+if (!Number.isInteger(PORT) || PORT < 0 || PORT > 65535) throw new Error("T3_MAP_PORT must be an integer from 0 to 65535.");
+const DESKTOP = process.env.T3_MAP_DESKTOP === "1";
+let boundPort = PORT;
 const HOST = "127.0.0.1";
 const WEB = fileURLToPath(new URL("../web/", import.meta.url));
 const EVENT_WINDOW_MS = 15 * 60_000;
@@ -506,12 +509,7 @@ function json(res, code, body) {
 function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true; // non-browser callers on loopback
-  try {
-    const u = new URL(origin);
-    return (u.hostname === "127.0.0.1" || u.hostname === "localhost") && Number(u.port) === PORT;
-  } catch {
-    return false;
-  }
+  return origin === `http://127.0.0.1:${boundPort}` || origin === `http://localhost:${boundPort}`;
 }
 
 async function readJson(req) {
@@ -529,13 +527,12 @@ async function readJson(req) {
 
 // Only answer requests addressed to our loopback name, so a DNS-rebinding page
 // on another domain can't read your thread titles through the stream.
-const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
-
 const server = createServer(async (req, res) => {
   res.setHeader("x-content-type-options", "nosniff");
   res.setHeader("content-security-policy", "frame-ancestors 'none'");
-  if (!ALLOWED_HOSTS.has(String(req.headers.host).toLowerCase())) return json(res, 421, { error: "Misdirected request" });
-  const url = new URL(req.url, `http://${HOST}:${PORT}`);
+  const host = String(req.headers.host).toLowerCase();
+  if (host !== `${HOST}:${boundPort}` && host !== `localhost:${boundPort}`) return json(res, 421, { error: "Misdirected request" });
+  const url = new URL(req.url, `http://${HOST}:${boundPort}`);
 
   if (url.pathname === "/api/stream") {
     res.writeHead(200, {
@@ -629,6 +626,27 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`T3 Map${DEMO ? " (demo data)" : ""} → http://${HOST}:${PORT}`);
+  boundPort = server.address().port;
   shell.start();
+  if (DESKTOP) console.log(JSON.stringify({ type: "t3-map-ready", port: boundPort }));
+  else console.log(`T3 Map${DEMO ? " (demo data)" : ""} → http://${HOST}:${boundPort}`);
 });
+
+if (DESKTOP) {
+  // The owning desktop keeps this pipe open. EOF also cleans up after a crash.
+  let stopping = false;
+  const stop = () => {
+    if (stopping) return;
+    stopping = true;
+    shell.stop();
+    for (const res of clients) res.end();
+    server.close(() => process.exit(0));
+    server.closeAllConnections();
+    setTimeout(() => process.exit(0), 1000).unref();
+  };
+  process.stdin.resume();
+  process.stdin.on("end", stop);
+  process.stdin.on("error", stop);
+  process.on("SIGTERM", stop);
+  process.on("SIGINT", stop);
+}

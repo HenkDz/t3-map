@@ -9,7 +9,28 @@ const port = 14874;
 const origin = `http://127.0.0.1:${port}`;
 let child;
 before(async () => {
-  child = spawn(process.execPath, ['server/index.mjs'], { cwd: new URL('..', import.meta.url), env: { ...process.env, T3_MAP_DEMO: '1', T3_MAP_PORT: String(port) }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Fail even when live adapters swallow an error and fall back to empty data.
+  const isolationGuard = `
+    import fs from 'node:fs/promises';
+    import cp from 'node:child_process';
+    import { Socket } from 'node:net';
+    import { syncBuiltinESMExports } from 'node:module';
+    import { resolve, relative, isAbsolute } from 'node:path';
+    import { fileURLToPath } from 'node:url';
+    const deny = () => { process.stderr.write('Demo attempted live filesystem, CLI or network access'); process.exit(90); };
+    for (const name of ['readFile', 'writeFile', 'mkdir']) {
+      const original = fs[name];
+      fs[name] = (path, ...args) => {
+        const local = relative(process.cwd(), resolve(path instanceof URL ? fileURLToPath(path) : String(path)));
+        if (local.startsWith('..') || isAbsolute(local)) deny();
+        return original(path, ...args);
+      };
+    }
+    cp.execFile = cp.spawn = Socket.prototype.connect = globalThis.fetch = globalThis.WebSocket = deny;
+    syncBuiltinESMExports();
+    await import('./server/index.mjs');
+  `;
+  child = spawn(process.execPath, ['--input-type=module', '--eval', isolationGuard], { cwd: new URL('..', import.meta.url), env: { ...process.env, T3_MAP_DEMO: '1', T3_MAP_PORT: String(port) }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let errors = '';
   child.stderr.on('data', (s) => errors += s);
   await Promise.race([once(child.stdout, 'data'), once(child, 'exit').then(() => { throw new Error(errors); }), new Promise((_, reject) => setTimeout(() => reject(new Error('Bridge startup timed out')), 5000).unref())]);
@@ -21,6 +42,28 @@ const post = async (path, body, headers = {}) => {
   return { status: res.status, value: await res.json() };
 };
 const view = async (id) => (await fetch(`${origin}/api/thread/${id}`)).json();
+
+test('isolated demo exposes only fictional projects, repositories, roster and sample questions', async () => {
+  const controller = new AbortController();
+  const stream = await fetch(`${origin}/api/stream`, { signal: controller.signal });
+  let frame = '';
+  try {
+    for await (const chunk of stream.body) {
+      frame += new TextDecoder().decode(chunk);
+      if (frame.includes('\n\n')) break;
+    }
+  } finally { controller.abort(); }
+  const state = JSON.parse(frame.split('\n').find((line) => line.startsWith('data: ')).slice(6));
+  assert.equal(state.demo, true);
+  assert.equal(state.team.file, null);
+  assert.deepEqual(state.projects.map((p) => p.title), ['Moonbeam Studio', 'Clover Market', 'Sunflower Academy', 'Paper Kite Post', 'Campfire Club', 'Pebble Browser', 'Puddle Bot', 'Acorn Notes', 'No project']);
+  assert.ok(state.projects.filter((p) => p.repo).every((p) => p.repo.startsWith('storybook-demo/')));
+  assert.equal(state.team.managers['p-mono'].project, 'Moonbeam Studio');
+  assert.equal(state.team.managers['p-dz'].project, 'Clover Market');
+  const conversations = await Promise.all(state.threads.map((t) => view(t.id)));
+  assert.match(conversations.find((p) => p.threadId === 'd-boss').pending.questions[0].question, /Clover Market Manager/);
+  assert.doesNotMatch(JSON.stringify({ state, conversations }), /monocode|dzdistro|elitepathways|achraf[-_]freight|wa_groups|wa_righclick|wa-lead-folders|browser-link-3-tauri|HenkDz|kky42|t3bot|T3 Bot Demo/i);
+});
 
 test('HTTP boundary rejects hostile origins, malformed JSON, arrays, null and unknown actions', async () => {
   assert.equal((await post('/api/act', { threadId: 'd-lead', action: 'stop' }, { origin: 'https://evil.example' })).status, 403);
@@ -75,7 +118,7 @@ test('project Manager setup reuses its pinned role and coalesces repeated clicks
   assert.equal(first.status, 200);
   assert.equal(second.value.threadId, first.value.threadId);
   const manager = await view(first.value.threadId);
-  assert.match(manager.turns.at(-1).user.text, /lead the wa_groups project/);
+  assert.match(manager.turns.at(-1).user.text, /lead the Campfire Club project/);
   assert.match(manager.turns.at(-1).user.text, /Boss thread/);
   assert.equal((await setup()).value.threadId, first.value.threadId);
   assert.equal((await view(first.value.threadId)).turns.length, manager.turns.length);
