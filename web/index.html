@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>T3 Map</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='6' fill='%235b8cff'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%235b8cff' stroke-opacity='.45' stroke-width='2'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="bar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"><i></i></span>
+          <span class="brand-name">Map</span>
+          <span class="brand-sub">for T3 Code</span>
+          <span class="demo-tag" title="This map is showing made-up threads, not your T3">Demo data</span>
+        </div>
+
+        <nav class="crumbs" id="crumbs" aria-label="Location"></nav>
+
+        <div class="stats" id="stats" aria-live="polite"></div>
+
+        <div class="bar-end">
+          <div class="spark" id="spark" title="Runs started and finished in the last hour"></div>
+          <div class="conn" id="conn"><span class="conn-dot"></span><span class="conn-label">Connecting</span></div>
+          <button type="button" class="dock-toggle" id="dock-toggle" aria-expanded="true" aria-controls="dock" aria-label="Hide sidebar" title="Hide sidebar  ]">
+            <svg viewBox="0 0 18 18" width="17" height="17" aria-hidden="true"><rect x="2" y="3" width="14" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/><rect class="pane" x="10.5" y="5" width="3.5" height="8" rx="1.2" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="body">
+        <section class="stage" id="stage" aria-label="Team map">
+          <div class="tip link-tip" id="link-tip" role="tooltip" hidden></div>
+          <svg class="map" id="map" role="img" aria-label="Live map of your projects and agent threads">
+            <defs>
+              <radialGradient id="g-you" cx="50%" cy="30%" r="80%">
+                <stop offset="0%" stop-color="var(--you-a)" />
+                <stop offset="100%" stop-color="var(--you-b)" />
+              </radialGradient>
+              <pattern id="p-dots" width="24" height="24" patternUnits="userSpaceOnUse">
+                <circle cx="1" cy="1" r="1" fill="var(--dot)" />
+              </pattern>
+            </defs>
+            <rect class="map-dots" x="-6000" y="-6000" width="12000" height="12000" fill="url(#p-dots)" />
+            <g id="world">
+              <g id="rings"></g>
+              <g id="links"></g>
+              <g id="pulses"></g>
+              <g id="nodes"></g>
+            </g>
+          </svg>
+
+          <div class="tip" id="tip" role="tooltip" hidden></div>
+
+          <div class="empty" id="empty" hidden></div>
+
+          <div class="team-prompt" id="team-prompt" hidden>
+            <span class="role-ic boss"><svg viewBox="-11 -9 22 17" width="15" height="12" aria-hidden="true"><path d="M-9 5.5V-3.5l4.5 4 4.5-7 4.5 7 4.5-4v9z" fill="currentColor"/></svg></span>
+            <div><b>Set up your team</b><small>A Boss for everything, a Manager per project. They only bring you the big calls.</small></div>
+            <button type="button" class="pill-btn" data-team="boss">Set up a Boss</button>
+            <button type="button" class="icon-btn" id="team-prompt-close" aria-label="Hide for now">×</button>
+          </div>
+
+          <div class="legend" aria-label="Legend">
+            <span><i class="lg lg-call"></i>Call</span>
+            <span><i class="lg lg-answer"></i>Answer</span>
+            <span><i class="lg lg-needs"></i>Needs you</span>
+            <span><i class="lg lg-failed"></i>Failed</span>
+            <span class="lg-note">thicker line = busier team</span>
+          </div>
+
+          <div class="zoom" role="group" aria-label="Zoom">
+            <button type="button" id="z-in" aria-label="Zoom in">+</button>
+            <button type="button" id="z-out" aria-label="Zoom out">−</button>
+            <button type="button" id="z-fit" aria-label="Show everything" title="Show everything (Esc)">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+
+          <form class="composer" id="composer" autocomplete="off">
+            <button type="button" class="composer-scope" id="scope" aria-haspopup="listbox" aria-expanded="false">
+              <span class="scope-dot"></span><span id="scope-label">Any project</span>
+              <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="image-tray new-image-tray" id="new-images" aria-label="Images for new work" hidden></div>
+            <div id="ask" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Start new work" data-placeholder="Tell the team what you want…"></div>
+            <button type="button" id="new-attach" class="attach-button" aria-label="Attach images to new work" title="Attach images or paste a screenshot"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l8.6-8.6a4 4 0 0 1 5.7 5.7l-8.6 8.6a2 2 0 0 1-2.8-2.8l8.5-8.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <input id="new-image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+            <button type="button" id="work-options-toggle" class="work-options-toggle" aria-label="New work options" aria-expanded="false" aria-controls="work-options"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="3.5" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="12.5" cy="8" r="1.4" fill="currentColor"/></svg></button>
+            <button type="submit" class="composer-go" aria-label="Start work">
+              <kbd>↵</kbd>
+            </button>
+            <div class="scope-menu" id="scope-menu" role="listbox" hidden></div>
+            <div id="work-options" class="work-options" role="dialog" aria-label="Where this goes" hidden>
+              <div class="seg-mini" role="tablist" aria-label="Send to">
+                <button type="button" role="tab" data-route="team" aria-selected="true" id="wo-team">Boss</button>
+                <button type="button" role="tab" data-route="new" aria-selected="false">New thread</button>
+              </div>
+              <input id="new-separate" type="checkbox" hidden />
+              <p class="wo-note" id="wo-note"></p>
+              <div class="wo-new" id="wo-new" hidden>
+                <label class="field"><span>Agent</span><select id="new-agent" aria-label="Agent"><option value="">Project default</option></select></label>
+                <label class="check-row"><input id="new-worktree" type="checkbox" /><span>Work in a new worktree</span></label>
+                <div id="worktree-fields" class="field-row" hidden><label class="field"><span>Start from</span><input id="new-base" placeholder="HEAD" maxlength="200" /></label><label class="field"><span>New branch</span><input id="new-branch" placeholder="Optional" maxlength="200" /></label></div>
+              </div>
+              <small class="wo-foot" id="wo-foot"></small>
+            </div>
+          </form>
+        </section>
+
+        <div class="dock" id="dock">
+        <aside class="rail" id="rail" aria-label="Needs you">
+          <div class="rail-head">
+            <div class="tabs" role="tablist">
+              <button role="tab" type="button" class="tab" data-tab="needs" aria-selected="true">Needs you <b id="needs-count">0</b></button>
+              <button role="tab" type="button" class="tab" data-tab="activity" aria-selected="false">Activity</button>
+              <button role="tab" type="button" class="tab" data-tab="team" aria-selected="false">Team</button>
+              <span class="tab-ink" aria-hidden="true"></span>
+            </div>
+            <div class="rail-filter" id="rail-filter" hidden></div>
+          </div>
+          <div class="rail-body" id="rail-body"></div>
+        </aside>
+
+        <aside id="thread-panel" class="thread-panel" aria-label="Conversation" inert>
+          <header class="thread-head">
+            <div class="thread-topline"><button type="button" class="icon-back" data-thread-action="close" aria-label="Back to map" title="Back to map  Esc"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1 id="thread-title" tabindex="-1">Conversation</h1><span id="thread-demo" class="thread-demo" hidden>Simulated</span><button type="button" class="icon-back" data-thread-action="refresh" aria-label="Refresh conversation" title="Refresh"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 3v2.6h-2.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+            <div class="thread-sub"><div id="thread-meta" class="thread-meta"></div><span id="thread-branch"></span><button type="button" id="thread-parent" class="link-btn" data-thread-action="parent" hidden>View lead thread ↗</button></div>
+            <div class="thread-nav"><div role="tablist" aria-label="Thread view"><button type="button" role="tab" data-thread-tab="conversation" aria-selected="true" aria-controls="thread-conversation">Conversation</button><button type="button" role="tab" data-thread-tab="changes" aria-selected="false" aria-controls="thread-changes">Changes</button><span class="tab-ink" aria-hidden="true"></span></div><div class="thread-actions"><button type="button" id="thread-read" class="action-quiet" data-thread-action="read" hidden>Mark read</button><button type="button" id="thread-settle" class="action-quiet" data-thread-action="settle" hidden>Settle</button><button type="button" id="thread-stop" class="action-stop" data-thread-action="stop" hidden>Stop</button></div></div>
+          </header>
+          <div id="thread-error" class="thread-error" role="alert" hidden></div>
+          <div id="thread-conversation" class="thread-conversation" role="tabpanel"></div>
+          <div id="thread-changes" class="thread-changes" role="tabpanel" hidden></div>
+          <div id="thread-request" class="thread-request" hidden></div>
+          <details id="thread-tasks" class="thread-tasks" open hidden></details>
+          <form id="reply-form" class="reply-form">
+            <label class="sr-only" for="reply">Reply to thread</label>
+            <div class="reply-box"><div class="image-tray" id="reply-images" aria-label="Attached images" hidden></div><div id="reply" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Reply to thread" data-placeholder="Tell the agent what’s next…"></div><div class="reply-tools"><button type="button" id="reply-attach" class="attach-button" aria-label="Attach images to reply" title="Attach images or paste a screenshot"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l8.6-8.6a4 4 0 0 1 5.7 5.7l-8.6 8.6a2 2 0 0 1-2.8-2.8l8.5-8.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button><input id="reply-image-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden /><span>Paste a screenshot or attach an image</span><button type="submit" class="action-primary" aria-label="Send reply">↑</button></div></div>
+            <small id="reply-hint">Enter to send · Shift + Enter for a new line</small>
+          </form>
+        </aside>
+        </div>
+      </main>
+
+      <footer class="ticker" id="ticker"><span class="ticker-label">Today</span><div class="ticker-track" id="ticker-track"></div></footer>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
