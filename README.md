@@ -6,12 +6,10 @@ A calm, live command map for T3 Code. Read conversations and steer the team with
 
 *Preview uses fictional demo data. Projects, repositories, conversations and decisions are simulated.*
 
-<details>
-<summary>Static screenshot</summary>
+Static screenshot
 
 ![T3 Map preview with fictional demo projects](docs/desktop-preview.jpg)
 
-</details>
 
 ## Desktop app (Windows)
 
