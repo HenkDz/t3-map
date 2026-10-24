@@ -6,11 +6,6 @@ A calm, live command map for T3 Code. Read conversations and steer the team with
 
 *Preview uses fictional demo data. Projects, repositories, conversations and decisions are simulated.*
 
-Static screenshot
-
-![T3 Map preview with fictional demo projects](docs/desktop-preview.jpg)
-
-
 ## Desktop app (Windows)
 
 The Tauri desktop app includes the Node runtime and the existing map. It starts its own local bridge and stops it when the app exits. T3 Code must still be installed and running for live projects; demo mode never connects to it.
