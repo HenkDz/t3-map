@@ -7,14 +7,14 @@ const iso = (msAgo = 0) => new Date(Date.now() - msAgo).toISOString();
 const min = 60_000;
 
 const PROJECTS = [
-  ["p-mono", "monocode", "HenkDz/monocode"],
-  ["p-dz", "dzdistro", "HenkDz/dzdistro"],
-  ["p-ep", "elitepathways", "HenkDz/elitepathways"],
-  ["p-af", "achraf-freight", "HenkDz/achraf-freight"],
-  ["p-wg", "wa_groups", "HenkDz/wa-lead-folders"],
-  ["p-bl", "browser-link-3-tauri", null],
-  ["p-tb", "T3 Bot Demo", "kky42/t3bot"],
-  ["p-wr", "wa_righclick", null],
+  ["p-mono", "Moonbeam Studio", "storybook-demo/moonbeam-studio"],
+  ["p-dz", "Clover Market", "storybook-demo/clover-market"],
+  ["p-ep", "Sunflower Academy", "storybook-demo/sunflower-academy"],
+  ["p-af", "Paper Kite Post", "storybook-demo/paper-kite-post"],
+  ["p-wg", "Campfire Club", "storybook-demo/campfire-club"],
+  ["p-bl", "Pebble Browser", null],
+  ["p-tb", "Puddle Bot", "storybook-demo/puddle-bot"],
+  ["p-wr", "Acorn Notes", null],
   ["p-none", "No project", null],
 ].map(([id, title, repo]) => ({
   id,
@@ -95,7 +95,7 @@ function scenario() {
     raw: {
       status: "running", activityRunStatus: "waiting",
       pendingRuntimeRequest: { id: "rq-boss", kind: "user_input", createdAt: iso(2 * min), blocking: true },
-      demoQuestion: { id: "xls", header: "XLS", question: "The dzdistro Manager asks: 3 distributors still upload the legacy XLS template. Support it, or go CSV-only and announce a deprecation?", multiSelect: false, allowCustom: true, options: [{ label: "CSV only, announce deprecation", description: "Boss recommends: less to maintain, one week notice", value: "csv" }, { label: "Support XLS too", description: "About a day of work plus a parser to maintain", value: "xls" }] },
+      demoQuestion: { id: "xls", header: "XLS", question: "The Clover Market Manager asks: 3 shopkeepers still upload the legacy XLS template. Support it, or go CSV-only and announce a deprecation?", multiSelect: false, allowCustom: true, options: [{ label: "CSV only, announce deprecation", description: "Boss recommends: less to maintain, one week notice", value: "csv" }, { label: "Support XLS too", description: "About a day of work plus a parser to maintain", value: "xls" }] },
     },
   });
   return [boss, lead, subA, subB, notes, inv, xls, rtl, sales, deploy, ledger, plan];
@@ -105,7 +105,7 @@ function scenario() {
 export function demoTeam() {
   return {
     boss: { threadId: "d-boss" },
-    managers: { "p-mono": { threadId: "d-lead", project: "monocode" }, "p-dz": { threadId: "d-inv", project: "dzdistro" } },
+    managers: { "p-mono": { threadId: "d-lead", project: "Moonbeam Studio" }, "p-dz": { threadId: "d-inv", project: "Clover Market" } },
     autonomy: { "p-dz": "cautious" },
   };
 }
