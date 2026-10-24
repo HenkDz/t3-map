@@ -423,7 +423,7 @@ async function teamAction(body) {
     team.boss = { threadId };
     // Managers briefed before there was a Boss learn where to escalate now.
     for (const [pid, m] of Object.entries(team.managers)) {
-      if (raw.has(m.threadId)) sendText(m.threadId, `Quick update: there is now a Boss thread (${threadId}). From now on, please send bigger calls to the Boss with t3_thread_send, starting with "Decision needed:", rather than asking me. No reply needed.`).catch(() => {});
+      if (raw.has(m.threadId)) sendText(m.threadId, `There is now a Boss thread (${threadId}). Read ~/.t3-map/policy.md; it is authoritative for decision rights. Send policy messages there with t3_thread_send: "Decision: … at HH:MM UTC unless you object." (proceed after 15 minutes without objection), or "Decision needed (user):" (hard stop; wait for an explicit yes). Done: only for user review or serious problems. No acknowledgements.`).catch(() => {});
     }
     await persistTeam();
     return [200, { ok: true, threadId }];

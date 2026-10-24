@@ -34,10 +34,29 @@ test("roles and autonomy are looked up from the roster", () => {
 test("the Boss brief routes through Managers and never merges", () => {
   const brief = bossBrief({ managers: [{ project: "dzdistro", threadId: "mgr1" }], rosterFile: "/x/team.json" });
   assert.match(brief, /t3_thread_send/);
-  assert.match(brief, /Decision needed:/);
+  assert.match(brief, /Decision needed \(user\):/);
   assert.match(brief, /dzdistro: thread mgr1/);
   assert.match(brief, /\/x\/team\.json/);
   assert.match(brief, /Merging and releasing stay with me/);
+});
+
+test("briefs and autonomy notes defer decision rights to the policy", () => {
+  for (const brief of [bossBrief(), managerBrief({ project: "T3 Map", bossThreadId: "boss" }), managerBrief({ project: "T3 Map" })]) {
+    assert.match(brief, /~\/.t3-map\/policy\.md/);
+    assert.match(brief, /authoritative for decision rights/);
+    assert.match(brief, /Decision: … at HH:MM UTC unless you object\./);
+    assert.match(brief, /15 minutes without objection/);
+    assert.match(brief, /Decision needed \(user\):/);
+    assert.match(brief, /hard stop/);
+    assert.match(brief, /Done:/);
+    assert.match(brief, /only for (?:work the )?user review or serious problems/);
+    assert.match(brief, /No acknowledgements/);
+    assert.doesNotMatch(brief, /quick "ready"|Decision needed:/);
+  }
+  for (const level of ["cautious", "normal", "bold"]) {
+    assert.match(autonomyNote(level), /policy\.md.*authoritative for decision rights/);
+    assert.doesNotMatch(autonomyNote(level), /Escalate/);
+  }
 });
 
 test("a Manager brief escalates to the Boss when there is one, otherwise to you", () => {

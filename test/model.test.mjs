@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { deriveState, diffThread, isSettled, linkWidth, modelName, normalizeThread, providerName } from "../server/model.mjs";
+import { STATE_LABEL } from "../web/ui.js";
 
 const base = {
   id: "t1",
@@ -25,6 +26,15 @@ const base = {
   deletedAt: null,
 };
 const t = (over) => ({ ...base, ...over });
+
+test("Boss labels follow actionable runtime requests, not message prefixes", () => {
+  for (const text of ["Decision: retry at 12:00 UTC unless you object.", "Decision needed (user): deploy?"]) {
+    const boss = t({ title: "Boss", text, status: "running", activityRunStatus: "running" });
+    assert.equal(STATE_LABEL[normalizeThread(boss).state], "Working");
+    assert.equal(STATE_LABEL[normalizeThread({ ...boss, pendingRuntimeRequest: { kind: "user_input", createdAt: "x" } }).state], "Needs you");
+  }
+  assert.equal(STATE_LABEL[normalizeThread(t({ activityRunStatus: "waiting" })).state], "Waiting on team");
+});
 
 test("needs-you beats everything, with a human reason", () => {
   const s = deriveState(t({ status: "running", activityRunStatus: "running", pendingRuntimeRequest: { id: "r", kind: "dynamic_tool_call", createdAt: "x" } }));

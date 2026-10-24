@@ -10,12 +10,6 @@ import { join } from "node:path";
 export const TEAM_FILE = join(homedir(), ".t3-map", "team.json");
 export const LEVELS = ["cautious", "normal", "bold"];
 
-const AUTONOMY = {
-  cautious: "decide only small, easily reversible things yourself. Escalate anything that changes scope, design, dependencies, data, or user-facing behavior.",
-  normal: "decide routine engineering choices yourself. Escalate anything that changes scope, costs money, touches production or customers, or changes the user experience.",
-  bold: "decide everything within the project's goals yourself. Escalate only irreversible, production-affecting, or spending decisions.",
-};
-
 export function emptyTeam() {
   return { boss: null, managers: {}, autonomy: {} };
 }
@@ -58,7 +52,10 @@ export function roleOf(team, threadId) {
 // Briefs are written as a plain request from the user, not a "You are..." persona prompt:
 // that framing, plus talk of other threads and tools, reads like prompt injection to
 // model safety filters, and a flagged thread can't answer anything afterwards.
-export const DECISION_TAG = "Decision needed:";
+export const DECISION_TAG = "Decision needed (user):";
+
+const POLICY = "Read ~/.t3-map/policy.md before acting. It is authoritative for decision rights and overrides this brief and autonomy levels.";
+const MESSAGES = `Use the policy's message format: "Decision: … at HH:MM UTC unless you object." (carry on; proceed after 15 minutes without objection), or "${DECISION_TAG}" (hard stop; wait for an explicit yes). "Done:" is two lines only for user review or serious problems. No acknowledgements, progress updates, or relays.`;
 
 export function bossBrief({ rosterFile = TEAM_FILE, managers = [] } = {}) {
   const roster = managers.length
@@ -66,18 +63,20 @@ export function bossBrief({ rosterFile = TEAM_FILE, managers = [] } = {}) {
     : "- None yet. I'll add them as we go; until then, just help me directly when I ask.";
   return `Hi! I'd like this thread to be my lead for all my software projects in T3 Code. I'll call it "the Boss".
 
+${POLICY}
 Here's the setup:
 - Each project can have its own lead thread (a Manager). The list of them is in ${rosterFile}. If a project has no Manager yet, start a thread in that project titled "<project name> Manager" and open its brief with: "Hi! I'd like this thread to lead the <project name> project for me in T3 Code." The map recognises that and registers it as the Manager, so there's only ever one.
 - When I give you a goal for a project, pass it to that project's Manager with the t3_thread_send tool: the goal, any constraints, and what done looks like.
-- Managers may message you with "${DECISION_TAG}" when they're unsure. Please make the call yourself when you reasonably can and reply to them the same way.
-- Bring me only the big calls: costly or hard-to-undo choices, or a change in product direction. Ask with your question tool, two or three options, your recommendation first.
+- Managers send "Decision: … at HH:MM UTC unless you object." and proceed after 15 minutes without objection. "${DECISION_TAG}" is a hard stop awaiting explicit user approval. "Done:" is only for user review or serious problems. No acknowledgements, progress updates, or relays.
+- Reply to Decision: only to object, using "Objection: …" or "Approved: …" plus anything new. Authorize outcomes, not procedures; do not restate standing rules.
+- Bring me only policy level-3 items, work ready for review, and serious problems. Ask hard-stop questions with your question tool, two or three options, your recommendation first.
 - Merging and releasing stay with me, so leave those for my review.
 - When you update me, start with the outcome in a sentence or two.
 
 Managers right now:
 ${roster}
 
-Just reply with a quick "ready" for now.`;
+No acknowledgement needed.`;
 }
 
 /** Which project a Manager brief is for, or null. Matches the opener every Manager brief
@@ -89,22 +88,24 @@ export function managerBriefProject(text) {
 
 export function managerBrief({ project, bossThreadId = null, level = "normal" }) {
   const escalate = bossThreadId
-    ? `- For bigger calls, message the Boss thread (${bossThreadId}) with t3_thread_send, starting with "${DECISION_TAG}": what needs deciding, the options, and what you'd pick. The Boss will check with me if needed.`
-    : `- For bigger calls, ask me with your question tool: what needs deciding, two or three options, and what you'd pick.`;
+    ? `- Send policy messages to the Boss thread (${bossThreadId}) with t3_thread_send. The Boss asks the user for hard stops.`
+    : `- With no Boss, ask me with your question tool for user-only hard stops; never bypass the policy.`;
   return `Hi! I'd like this thread to lead the ${project} project for me in T3 Code. I'll call it the ${project} Manager.
 
+${POLICY}
 Here's how I'd like it to work:
 - Split work into focused tasks and hand them to helper agents with the delegate_task tool. Answer their questions yourself where you can.
-- How much to decide on your own (${level}): ${AUTONOMY[level]}
+- Autonomy on your own (${level}) remains subordinate to the policy.
 ${escalate}
+- ${MESSAGES}
 - Check the helpers' results before calling something done. Merging and releasing stay with me: get the pull request ready and tell me it's ready to review.
-- When a goal is done, reply with a short summary of the outcome.
+- Progress stays in this thread. Merging, releasing, and deploying require explicit user approval.
 
-Just reply with a quick "ready" for now.`;
+No acknowledgement needed.`;
 }
 
 export function autonomyNote(level) {
-  return `Update from the user: autonomy for this project is now ${level}. From now on, ${AUTONOMY[level]} No reply needed.`;
+  return `Update from the user: autonomy for this project is now ${level}. ${POLICY} Decide only within its decision rights. No reply needed.`;
 }
 
 export function bossRosterNote(managers) {
