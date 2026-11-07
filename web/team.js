@@ -37,14 +37,14 @@ export function rosterHTML({ team, threads, projects, active, quiet, scoped }) {
       const isQuiet = quiet.includes(p);
       const who = m
         ? t
-          ? `<button type="button" class="role-who" data-act="open" data-id="${esc(t.id)}">${glyph(t.provider, 12)}<span>Manager · ${esc(t.providerName)}</span><span class="chip ${t.state}">${esc(stateText(t))}</span></button>`
+          ? `<button type="button" class="role-who" data-act="open" data-id="${esc(t.id)}">${glyph(t.provider, 12)}<span>Manager · ${esc(t.providerName)} · ${esc(t.model ?? '')}</span><span class="chip ${t.state}">${esc(stateText(t))}</span></button>`
           : `<span class="role-who missing">Manager thread is gone</span>`
         : `<span class="role-who none">No Manager</span>`;
       const levels = m
         ? `<div class="level" role="radiogroup" aria-label="Autonomy for ${esc(p.title)}">${LEVELS.map(([v, label, help]) => `<button type="button" role="radio" aria-checked="${level === v}" title="${esc(help)}" data-team="level" data-project="${esc(p.id)}" data-level="${v}">${label}</button>`).join("")}</div>`
         : "";
       const controls = m
-        ? `<button type="button" class="icon-btn" data-team="unassign" data-role="manager" data-project="${esc(p.id)}" title="Remove this Manager role (the thread stays in T3)" aria-label="Remove Manager for ${esc(p.title)}">×</button>`
+        ? `${t ? `<button type="button" class="text-btn" data-team="manager-agent" data-project="${esc(p.id)}" aria-label="Change agent for ${esc(p.title)} Manager">Change agent</button>` : ''}<button type="button" class="icon-btn" data-team="unassign" data-role="manager" data-project="${esc(p.id)}" title="Remove this Manager role (the thread stays in T3)" aria-label="Remove Manager for ${esc(p.title)}">×</button>`
         : `<button type="button" class="ghost-pill" data-team="manager" data-project="${esc(p.id)}">Assign</button>`;
       return `<div class="role-row ${isQuiet ? "quiet" : ""} ${m ? "has" : ""}" data-key="role:${esc(p.id)}">
         <span class="role-ic proj" style="--hue:${projectColor(p)}">${esc(monogram(p.title))}</span>
@@ -55,7 +55,7 @@ export function rosterHTML({ team, threads, projects, active, quiet, scoped }) {
     .join("");
 
   return `<section class="group roster"><div class="group-title"><span>Boss</span></div>${bossBlock}</section>
-    <section class="group roster"><div class="group-title"><span>Managers</span><span>${assigned} of ${list.length}</span></div>${rows || `<p class="role-note">No projects yet.</p>`}
+    <section class="group roster"><div class="group-title"><span>Managers</span><span>${assigned} of ${list.length}</span></div><button type="button" class="text-btn" data-team="manager-default">Auto-create default agent</button>${rows || `<p class="role-note">No projects yet.</p>`}
     <p class="role-note">Managers run their project's workers and decide routine things. Above their autonomy they escalate to the Boss, and the Boss only brings you the big calls. Merging is always yours.</p></section>`;
 }
 
@@ -83,6 +83,16 @@ export function chainHTML(chain) {
   return `<div class="item-chain">${chain.map((c, i) => `<span class="${i === chain.length - 1 ? "you" : ""}">${esc(c)}</span>`).join('<i aria-hidden="true">→</i>')}</div>`;
 }
 
+export function managerSettingsHTML({ kind, current, managerDefault, agents, projectTitle }) {
+  const defaults = kind === 'manager-default';
+  const pair = defaults ? managerDefault : current;
+  const pick = agents.findIndex((a) => a.provider === pair?.provider && a.model === pair?.model);
+  return `<form method="dialog" class="td"><header><div><h2>${defaults ? 'Auto-create default agent' : `Manager agent for ${esc(projectTitle)}`}</h2><p>Current: ${esc(pair?.provider ?? '')} · ${esc(pair?.model ?? '')}</p></div></header>
+    <label>Agent<select name="agent" required>${pick < 0 ? '<option value="" selected disabled>Choose a starred agent</option>' : ''}${agents.map((a, i) => `<option value="${i}" ${i === pick ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}</select></label>
+    <p>${defaults ? 'Used for future auto-created Managers across projects. Existing Managers keep their settings.' : 'Keeps this thread and its conversation history. Saves settings without starting work. Finish pending work and requests first. Changing providers may reset the provider session.'}</p>
+    <footer><button type="button" class="text-btn" data-close>Cancel</button><button type="submit" class="pill-btn" ${agents.length ? '' : 'disabled'}>Save agent</button></footer></form>`;
+}
+
 /** One dialog for setting up the Boss and assigning Managers. */
 export function createTeamDialog({ post, toast, openThread, data }) {
   const dialog = document.createElement("dialog");
@@ -100,6 +110,17 @@ export function createTeamDialog({ post, toast, openThread, data }) {
     e.preventDefault();
     const f = new FormData(dialog.querySelector("form"));
     const agent = ctx.agents[f.get("agent")];
+    if (ctx.kind === 'manager-agent' || ctx.kind === 'manager-default') {
+      const go = dialog.querySelector('[type=submit]');
+      go.disabled = true;
+      try {
+        if (!agent) throw new Error('Choose a starred agent.');
+        await post('/api/team', { action: ctx.kind, projectId: ctx.projectId, threadId: ctx.current?.threadId, provider: agent.provider, model: agent.model });
+        dialog.close();
+        toast(ctx.kind === 'manager-default' ? 'Auto-create default saved' : 'Manager agent updated');
+      } catch (err) { toast(err.message); go.disabled = false; }
+      return;
+    }
     const body =
       ctx.kind === "boss"
         ? ctx.mode === "adopt"
@@ -132,6 +153,10 @@ export function createTeamDialog({ post, toast, openThread, data }) {
 
   function paint() {
     const { kind, mode, agents, candidates, homes, projectTitle } = ctx;
+    if (kind === 'manager-agent' || kind === 'manager-default') {
+      dialog.innerHTML = managerSettingsHTML(ctx);
+      return;
+    }
     const boss = kind === "boss";
     // Claude Team (Claude without the global skill library) first: Opus 5.5 works there.
     const team = agents.findIndex((a) => a.provider === "claudeTeam");
@@ -162,9 +187,18 @@ export function createTeamDialog({ post, toast, openThread, data }) {
     const d = data();
     let agents = [];
     try {
-      const res = await fetch("/api/agents");
+      const res = await fetch(`/api/agents${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`);
       agents = res.ok ? await res.json() : [];
     } catch {}
+    let settings;
+    if (kind === 'manager-agent' || kind === 'manager-default') {
+      try {
+        const res = await fetch(`/api/manager-settings?projectId=${encodeURIComponent(projectId ?? '')}`);
+        if (!res.ok) throw new Error('Could not load Manager settings.');
+        settings = await res.json();
+      } catch (err) { toast(err.message); return; }
+      if (kind === 'manager-agent' && !settings.current) { toast('The Manager is no longer available.'); return; }
+    }
     const roleIds = new Set([d.team?.boss?.threadId, ...Object.values(d.team?.managers ?? {}).map((m) => m.threadId)].filter(Boolean));
     const live = [...d.threads.values()].filter((t) => t.visible && !roleIds.has(t.id) && !t.parentId);
     const noProject = [...d.projects.values()].find((p) => p.title === "No project" || /[\\/]\.t3[\\/]scratch[\\/]?$/i.test(p.root ?? "")) ?? null;
@@ -173,6 +207,8 @@ export function createTeamDialog({ post, toast, openThread, data }) {
     const p = projectId ? d.projects.get(projectId) : null;
     ctx = {
       kind,
+      current: settings?.current,
+      managerDefault: settings?.managerDefault,
       projectId,
       projectTitle: p?.title ?? "",
       hue: p ? projectColor(p) : "",
@@ -192,6 +228,7 @@ export function createTeamDialog({ post, toast, openThread, data }) {
 
 export async function teamAction(target, { post, toast, data, dialog, confirmRemove }) {
   const kind = target.dataset.team;
+  if (kind === 'manager-agent' || kind === 'manager-default') return dialog.open(kind, target.dataset.project);
   if (kind === "boss") return dialog.open("boss");
   if (kind === "manager") return dialog.open("manager", target.dataset.project);
   if (kind === "level") {

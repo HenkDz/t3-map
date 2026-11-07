@@ -147,6 +147,32 @@ test('image upload, inline context, reply, new work and protected preview comple
   assert.equal((await view(created.value.threadId)).turns.at(-1).user.attachments.length, 1);
   assert.equal((await post('/api/act', { threadId: 'd-notes', action: 'send', text: 'No', imageIds: ['unknown'] })).status, 409);
 });
+test('Manager settings HTTP validates picks, guards active work, retains history, and uses auto-create default', async () => {
+  const settings = async (pid) => (await fetch(`${origin}/api/manager-settings?projectId=${pid}`)).json();
+  const change = { action: 'manager-agent', projectId: 'p-dz', threadId: 'd-inv', provider: 'claudeAgent', model: 'claude-opus-5-5' };
+  const initial = await settings('p-dz');
+  assert.equal((await post('/api/team', change)).status, 409);
+  assert.deepEqual(await settings('p-dz'), initial);
+  assert.equal((await post('/api/team', { ...change, provider: 'invalid' })).status, 400);
+  assert.equal((await post('/api/team', { ...change, model: 'invalid' })).status, 400);
+  assert.equal((await post('/api/team', { ...change, threadId: 'd-boss' })).status, 409);
+  await post('/api/act', { action: 'stop', threadId: 'd-inv' });
+  const before = await view('d-inv');
+  const teamBefore = await (await fetch(origin + '/api/team')).json();
+  assert.equal((await post('/api/team', { ...change, modelSelection: { options: [{ id: 'effort', value: 'bad' }] } })).status, 200);
+  const current = (await settings('p-dz')).current;
+  assert.deepEqual(current, { threadId: 'd-inv', provider: change.provider, model: change.model });
+  assert.deepEqual((await view('d-inv')).turns, before.turns);
+  assert.deepEqual(await (await fetch(origin + '/api/team')).json(), teamBefore);
+  assert.equal((await post('/api/team', { ...change, action: 'manager-default', provider: 'invalid' })).status, 400);
+  assert.equal((await post('/api/team', { action: 'manager-default', provider: change.provider, model: change.model })).status, 200);
+  assert.deepEqual((await settings('p-dz')).current, current);
+  const created = await post('/api/team', { action: 'manager', mode: 'ensure', projectId: 'p-wr' });
+  assert.equal(created.status, 200);
+  assert.equal((await settings('p-wr')).current.provider, change.provider);
+  assert.equal((await settings('p-wr')).current.model, change.model);
+});
+
 test('RPC client dispatches structured commands and propagates T3 failures and timeouts', async () => {
   const shell = new T3Shell(), sent = [];
   shell.ws = { readyState: 1, send: (text) => sent.push(JSON.parse(text)) };

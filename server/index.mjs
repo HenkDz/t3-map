@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { DEFAULT_MANAGER, loadManagerDefault, saveManagerDefault, configureManager } from './manager-settings.mjs';
 import { T3Shell, favorites, providerInstances, runCli, launchDefaults } from "./t3.mjs";
 import { ImageStore, MAX_IMAGE_BYTES, IMAGE_TYPES } from "./images.mjs";
 import { slimProjection } from "./thread.mjs";
@@ -30,6 +31,9 @@ const projects = new Map(); // projectId -> normalized project
 const projectDefaults = new Map();
 let events = []; // recent map events (newest last)
 let team = DEMO ? demoTeam() : await loadTeam();
+let managerDefault = DEMO ? { ...DEFAULT_MANAGER } : await loadManagerDefault();
+let settingsWrite = Promise.resolve();
+const managerChanges = new Set();
 const live = { bossFrom: DEMO ? "d-inv" : null }; // which thread the Boss's current question came from
 let seq = 0;
 
@@ -248,15 +252,16 @@ async function act(body) {
   return [200, { ok: true }];
 }
 
-async function agents() {
+async function agents(projectId = null) {
   const list = DEMO
     ? [{ provider: "claudeAgent", model: "claude-opus-5-5" }, { provider: "codex", model: "gpt-6.1-sol" }, { provider: "grok", model: "grok-4.7" }]
     : await favorites();
   // "Claude · Team" is a T3 Claude instance launched without skills. A big global skill
   // library (security tooling especially) makes Opus 5.5's safety filter block threads
   // that have no project around them, like the Boss in "No project".
-  if (!DEMO && (await providerInstances()).claudeTeam && !list.some((f) => f.provider === "claudeTeam")) list.unshift({ provider: "claudeTeam", model: "claude-opus-5-5" });
-  return [200, list.map((f) => ({ provider: f.provider, model: f.model, label: `${providerName(f.provider)} · ${modelName({ model: f.model })}` }))];
+  const instances = DEMO ? null : await providerInstances(projectId);
+  if (!DEMO && instances.claudeTeam && !list.some((f) => f.provider === "claudeTeam")) list.unshift({ provider: "claudeTeam", model: "claude-opus-5-5" });
+  return [200, list.filter((f) => DEMO || Object.hasOwn(instances, f.provider)).map((f) => ({ provider: f.provider, model: f.model, label: `${providerName(f.provider)} · ${modelName({ model: f.model })}` }))];
 }
 
 async function start(body) {
@@ -273,7 +278,7 @@ async function start(body) {
   let selectedModel = null;
   if (body.provider || body.model) {
     // Only the agents you've starred in T3 — never arbitrary values.
-    const [, list] = await agents();
+    const [, list] = await agents(projectId);
     const fav = list.find((f) => f.provider === body.provider && f.model === body.model);
     if (!fav) return [400, { error: "Pick one of your starred agents." }];
     args.push("--provider", fav.provider, "--model", fav.model);
@@ -342,7 +347,7 @@ async function sendText(threadId, text) {
 async function startRole({ projectId, title, text, provider, model }) {
   let fav = null;
   if (provider || model) {
-    const [, list] = await agents();
+    const [, list] = await agents(projectId);
     fav = list.find((f) => f.provider === provider && f.model === model);
     if (!fav) throw Object.assign(new Error("Pick one of your starred agents."), { status: 400 });
   }
@@ -409,6 +414,29 @@ async function claimManager(t) {
 
 async function teamAction(body) {
   const action = body.action;
+  if (action === 'manager-default' || action === 'manager-agent') {
+    const [, list] = await agents(action === 'manager-agent' ? body.projectId : null);
+    const pair = list.find((p) => p.provider === body.provider && p.model === body.model);
+    if (!pair) return [400, { error: 'Pick an enabled starred agent.' }];
+    const selected = { provider: pair.provider, model: pair.model };
+    if (action === 'manager-default') {
+      const write = settingsWrite.catch(() => {}).then(async () => {
+        if (!DEMO) await saveManagerDefault(selected);
+        managerDefault = selected;
+      });
+      settingsWrite = write;
+      await write;
+      return [200, { ok: true, managerDefault }];
+    }
+    const threadId = team.managers[body.projectId]?.threadId;
+    if (!threadId || threadId !== body.threadId || !raw.has(threadId)) return [409, { error: 'The Manager has changed. Reopen its settings.' }];
+    if (managerChanges.has(threadId)) return [409, { error: 'Manager settings are already being saved.' }];
+    managerChanges.add(threadId);
+    try {
+      await configureManager(shell, threadId, selected);
+      return [200, { ok: true, threadId }];
+    } finally { managerChanges.delete(threadId); }
+  }
   if (action === "boss") {
     let threadId;
     if (body.mode === "adopt") {
@@ -447,7 +475,7 @@ async function teamAction(body) {
         await persistTeam();
         return [200, { ok: true, threadId: existing.id, adopted: true }];
       }
-      const pending = teamAction({ action: "manager", mode: "new", projectId, provider: "codex", model: "gpt-6.1-sol" });
+      const pending = teamAction({ action: "manager", mode: "new", projectId, ...managerDefault });
       managerStarts.set(projectId, pending);
       try { return await pending; } finally { managerStarts.delete(projectId); }
     }
@@ -584,8 +612,12 @@ const server = createServer(async (req, res) => {
     }
   }
   if (req.method === "GET" && url.pathname === "/api/team") return json(res, 200, teamView());
+  if (req.method === 'GET' && url.pathname === '/api/manager-settings') {
+    const t = raw.get(team.managers[url.searchParams.get('projectId')]?.threadId);
+    return json(res, 200, { managerDefault, current: t ? { threadId: t.id, provider: t.providerInstanceId, model: t.modelSelection?.model } : null });
+  }
   if (req.method === "GET" && url.pathname === "/api/agents") {
-    try { const [code, out] = await agents(); return json(res, code, out); }
+    try { const [code, out] = await agents(url.searchParams.get('projectId')); return json(res, code, out); }
     catch (e) { return json(res, 502, { error: e.message }); }
   }
   if (req.method === "GET" && url.pathname.startsWith("/api/changes/")) {

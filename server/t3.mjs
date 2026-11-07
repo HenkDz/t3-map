@@ -38,11 +38,24 @@ export async function favorites() {
   }
 }
 
-/** T3 provider instances that are switched on, by id (e.g. "claudeTeam"). */
-export async function providerInstances() {
+const DEFAULT_DISABLED_DRIVERS = new Set(['cursor', 'grok', 'fx', 'kiro', 'muse', 'pi', 'opencode', 'antigravity']);
+
+export function enabledProviderInstances(settings, projectId = null) {
+  const instances = { codex: { driver: 'codex' }, claudeAgent: { driver: 'claudeAgent' }, ...settings.providerInstances };
+  return Object.fromEntries(Object.entries(instances).filter(([id, instance]) => {
+    const override = settings.projectSettingsOverrides?.[projectId]?.providerInstances?.[id]?.enabled;
+    if (typeof override === 'boolean') return override;
+    const nested = typeof instance?.config?.enabled === 'boolean' ? instance.config.enabled : undefined;
+    if (instance?.enabled === false || nested === false) return false;
+    return instance?.enabled ?? nested ?? !DEFAULT_DISABLED_DRIVERS.has(instance?.driver ?? id);
+  }));
+}
+
+/** Includes T3's enabled stock instances even when settings omit their entries. */
+export async function providerInstances(projectId = null) {
   try {
     const s = JSON.parse(await readFile(join(T3_HOME, "userdata", "settings.json"), "utf8"));
-    return Object.fromEntries(Object.entries(s.providerInstances ?? {}).filter(([, v]) => v?.enabled !== false));
+    return enabledProviderInstances(s, projectId);
   } catch {
     return {};
   }
