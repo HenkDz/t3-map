@@ -17,7 +17,7 @@ await rm(resources, { recursive: true, force: true });
 await mkdir(join(root, 'src-tauri', 'binaries'), { recursive: true });
 for (const name of [
   'server/index.mjs', 'server/t3.mjs', 'server/demo.mjs', 'server/team.mjs',
-  'server/images.mjs', 'server/model.mjs', 'server/thread.mjs',
+  'server/images.mjs', 'server/model.mjs', 'server/thread.mjs', 'server/manager-settings.mjs',
   'web/index.html', 'web/styles.css', 'web/app.js', 'web/map.js', 'web/ui.js',
   'web/composer.js', 'web/thread.js', 'web/team.js', 'web/provider-logos.js',
   'package.json', 'THIRD_PARTY_NOTICES.md',

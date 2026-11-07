@@ -139,6 +139,18 @@ export class DemoShell extends EventEmitter {
 
   // ---- thread panel (simulated; nothing reaches a real T3) ----
 
+  async call(tag, { threadId }) {
+    if (tag !== 'orchestration.getThreadProjection') throw new Error('Unsupported demo call');
+    const thread = this.threads.get(threadId);
+    return { thread, runs: [{ status: thread.activityRunStatus ?? thread.status }], runtimeRequests: thread.pendingRuntimeRequest ? [{ status: 'pending' }] : [] };
+  }
+
+  async dispatch(command) {
+    if (!['provider.switch', 'thread.model-selection.set'].includes(command.type)) throw new Error('Unsupported demo command');
+    this.update(command.threadId, { providerInstanceId: command.modelSelection.instanceId, modelSelection: command.modelSelection });
+    return { ok: true };
+  }
+
   projection(id) {
     const t = this.threads.get(id);
     const said = (this.said ??= new Map()).get(id) ?? [];
