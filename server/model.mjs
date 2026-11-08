@@ -104,9 +104,32 @@ export function isVisible(t, state) {
   return ACTIVE_STATES.has(state) || !isSettled(t);
 }
 
+/**
+ * The one PR worth showing for a thread, with its real state from T3's synced snapshot.
+ * An open PR wins over history: a Manager that merged 50 PRs shouldn't wear the oldest one.
+ * Only the `pullRequests` list carries GitHub state; linked/branch refs are matched against it.
+ */
+export function pickPullRequest(t) {
+  const list = (t.pullRequests ?? []).filter((p) => p?.number);
+  const stateOf = (p) => {
+    const snap = p?.snapshot ?? list.find((x) => x.number === p?.number && (!p.repository || x.repository === p.repository))?.snapshot;
+    if (!snap?.state) return null;
+    return snap.state === "open" && snap.isDraft ? "draft" : snap.state;
+  };
+  const shape = (p) => (p?.number ? { number: p.number, url: p.url ?? null, state: stateOf(p), count: list.length } : null);
+  const linked = shape(t.linkedPullRequest);
+  if (linked && linked.state !== "merged" && linked.state !== "closed") return linked;
+  const branch = shape(t.branchPullRequest);
+  if (branch && branch.state !== "merged" && branch.state !== "closed") return branch;
+  const recent = (p) => Date.parse(p.snapshot?.updatedAt ?? p.linkedAt ?? "") || 0;
+  const open = list.filter((p) => ["open", "draft"].includes(stateOf(p))).sort((a, b) => recent(b) - recent(a))[0];
+  if (open) return shape(open);
+  return linked ?? branch ?? shape([...list].sort((a, b) => recent(b) - recent(a))[0]);
+}
+
 export function normalizeThread(t) {
   const { state, reason, since, resetsAt } = deriveState(t);
-  const pr = t.linkedPullRequest ?? t.branchPullRequest ?? t.pullRequests?.[0] ?? null;
+  const pr = pickPullRequest(t);
   return {
     id: t.id,
     projectId: t.projectId,
@@ -123,7 +146,7 @@ export function normalizeThread(t) {
     relation: t.lineage?.relationshipToParent ?? null,
     byAgent: t.createdBy === "agent",
     branch: t.branch ?? null,
-    pr: pr?.number ? { number: pr.number, url: pr.url ?? null } : null,
+    pr,
     goal: t.goal?.objective ?? t.goal?.title ?? null,
     items: t.itemCount ?? 0,
     startedAt: t.latestRunStartedAt ?? null,

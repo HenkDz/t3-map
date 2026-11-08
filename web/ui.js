@@ -83,6 +83,15 @@ export const STATE_LABEL = {
   idle: "Idle",
 };
 
+/** "PR #12 · merged", from T3's synced GitHub state; just "PR #12" when T3 hasn't synced it. */
+export function prLabel(pr) {
+  if (!pr?.number) return "";
+  return pr.state ? `PR #${pr.number} · ${pr.state}` : `PR #${pr.number}`;
+}
+
+/** Open or draft: work still waiting on review or merge. */
+export const prLive = (pr) => pr?.state === "open" || pr?.state === "draft";
+
 export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // shortcut: common chat Markdown only; use a full parser when richer documents are needed.

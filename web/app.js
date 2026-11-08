@@ -1,10 +1,11 @@
 // T3 Map — app controller: live stream, header, rail, ticker, composer.
 
 import { createMap } from "./map.js";
+import { createDeck } from "./deck.js";
 import { createThreadPanel } from "./thread.js";
 import { createComposer } from "./composer.js";
 import { BOSS, CROWN, chainFor, chainHTML, createTeamDialog, rosterHTML, teamAction } from "./team.js";
-import { STATE_LABEL, ago, clock, esc, glyph, moveInk, projectColor, replay, truncate } from "./ui.js";
+import { STATE_LABEL, ago, clock, esc, glyph, moveInk, prLabel, projectColor, replay, truncate } from "./ui.js";
 
 const $ = (s) => document.querySelector(s);
 
@@ -83,7 +84,7 @@ function connect() {
     if (S.events.length > 2000) S.events.splice(0, S.events.length - 2000);
     render();
     // Pulses run after the render so new nodes and links already exist.
-    nextFrame(() => list.forEach((ev) => map.pulse(ev)));
+    nextFrame(() => list.forEach((ev) => (map.pulse(ev), deck.pulse(ev))));
   });
   es.onerror = () => {
     S.status = { state: "reconnecting", detail: "Reconnecting to the map server…" };
@@ -182,6 +183,7 @@ function render() {
     M = model();
     if (S.focus && !M.active.some((p) => p.id === S.focus)) S.focus = null;
     map.update(M);
+    deck.update(M);
     renderStats();
     renderCrumbs();
     renderSpark();
@@ -468,7 +470,7 @@ function showTip(h) {
       <div class="row"><span class="chip ${t.state}">${esc(STATE_LABEL[t.state])}</span><span>${esc(ago(t.since, now))}</span></div>
       <div class="row">${glyph(t.provider, 13)}<span>${esc([t.providerName, t.model].filter(Boolean).join(" · "))}</span></div>
       ${t.state !== "working" && t.reason && t.state !== "idle" ? `<div class="row">${esc(t.reason)}</div>` : ""}
-      ${t.branch ? `<div class="row"><span style="font-family:var(--mono);font-size:11px">${esc(truncate(t.branch, 40))}</span>${t.pr ? `<span>· PR #${t.pr.number}</span>` : ""}</div>` : ""}
+      ${t.branch ? `<div class="row"><span style="font-family:var(--mono);font-size:11px">${esc(truncate(t.branch, 40))}</span>${t.pr ? `<span>· ${esc(prLabel(t.pr))}</span>` : ""}</div>` : ""}
       ${t.parentId && S.threads.get(t.parentId) ? `<div class="row">Lead: ${esc(truncate(S.threads.get(t.parentId).title, 38))}</div>` : ""}
       <div class="hint">Click to view conversation</div>`;
   } else if (h.kind === "project") {
@@ -599,20 +601,35 @@ function openThread(id) {
     if (manager) S.scope = manager[0];
   }
   S.selected = id;
+  S.lastPanel = id;
+  deck.closeCard();
   panel.open(id);
   syncDockToggle();
   render();
 }
 
-const panel = createThreadPanel({ thread: (id) => S.threads.get(id), project: projTitle, post, toast, onOpen: openThread, onClose: () => { syncDockToggle(); render(); } });
+const panel = createThreadPanel({ thread: (id) => S.threads.get(id), project: projTitle, post, toast, onOpen: openThread, onClose: panelClosed });
 
-function focusProject(id) {
+// Closing a conversation opened from the deck lands back on its card.
+function panelClosed() {
+  syncDockToggle();
+  render();
+  const back = S.lastPanel;
+  const t = back && S.threads.get(back);
+  if (deck.open && t && t.projectId === deck.project && !matchMedia("(max-width: 980px)").matches) setTimeout(() => deck.open && !panel.id && deck.select(back), 420);
+}
+
+// Dive from the overview into a project's mission deck.
+function focusProject(id, select) {
+  if (S.focus === id) return select && deck.select(select);
+  const origin = map.screenPos(id);
+  if (S.focus) deck.exit(null);
   S.focus = id;
   S.scope = id;
-  // Zooming into a team always shows the team.
-  if (isCollapsed(id)) (S.fold.set(id, false), saveFold());
+  $("#tip").hidden = true;
+  $("#link-tip").hidden = true;
+  deck.enter(id, origin, { select });
   render();
-  setTimeout(() => map.focusOn(id), 120);
 }
 
 async function selectProject(id) {
@@ -634,20 +651,34 @@ async function selectProject(id) {
 }
 
 function overview() {
+  const was = S.focus;
   S.focus = null;
   S.scope = M?.bossId ? BOSS : null;
   S.selected = null;
+  // Surface first, so closing the panel doesn't reopen a deck card.
+  if (was) deck.exit(map.screenPos(was));
   if (panel.id) panel.close();
   render();
-  map.fit();
+  if (!was) map.fit();
 }
 
 function locate(id) {
   const t = S.threads.get(id);
   if (!t) return;
   S.selected = id;
-  if (S.focus !== t.projectId) focusProject(t.projectId);
+  if (M?.active.some((p) => p.id === t.projectId)) focusProject(t.projectId, id);
   else render();
+}
+
+async function deckAct(threadId, action, extra = {}) {
+  try {
+    await post("/api/act", { threadId, action, ...extra });
+    toast(S.demo ? "Demo action applied" : ({ send: "Reply sent to T3", read: "Marked as read", settle: "Thread settled", stop: "Stop requested" }[action] ?? "Sent to T3"));
+    return true;
+  } catch (e) {
+    toast(e.message);
+    return false;
+  }
 }
 
 const map = createMap($("#stage"), {
@@ -658,11 +689,7 @@ const map = createMap($("#stage"), {
     $("#tip").hidden = true;
     render();
   },
-  onZoom: (id) => {
-    if (S.focus === id) return overview();
-    focusProject(id);
-    selectProject(id);
-  },
+  onZoom: (id) => (S.focus === id ? overview() : focusProject(id)),
   onThread: (id) => openThread(id),
   onQuiet: () => ((S.quietOpen = !S.quietOpen), render()),
   onChip: selectProject,
@@ -678,6 +705,20 @@ const map = createMap($("#stage"), {
   },
   onCamera: () => (($("#tip").hidden = true), ($("#link-tip").hidden = true)),
   bottomOverlay: () => $("#composer"),
+});
+
+const deck = createDeck($("#stage"), {
+  project: (id) => S.projects.get(id),
+  thread: (id) => S.threads.get(id),
+  autonomy: (id) => S.team?.autonomy?.[id],
+  events: () => S.events,
+  offset: () => S.serverOffset,
+  panelOpen: () => Boolean(panel.id),
+  panelId: () => panel.id,
+  openFull: (id) => openThread(id),
+  onBack: () => overview(),
+  onSetup: (id) => selectProject(id),
+  act: deckAct,
 });
 
 const teamDialog = createTeamDialog({ post, toast, openThread: (id) => openThread(id), data: () => ({ team: S.team, threads: S.threads, projects: S.projects, scope: S.scope }) });
@@ -717,12 +758,14 @@ $("#rail-body").addEventListener("pointerover", (e) => {
   if (id === S.selected) return;
   S.selected = id;
   map.update(M);
+  deck.highlight(id);
 });
 
 $("#team-prompt-close").onclick = () => (sessionStorage.setItem("t3map.teamPrompt", "hidden"), renderTeamPrompt());
-$("#z-in").onclick = () => map.zoomIn();
-$("#z-out").onclick = () => map.zoomOut();
-$("#z-fit").onclick = overview;
+// Zoom controls drive whichever view is showing: the deck when you're inside a project.
+$("#z-in").onclick = () => (deck.open ? deck.zoomIn() : map.zoomIn());
+$("#z-out").onclick = () => (deck.open ? deck.zoomOut() : map.zoomOut());
+$("#z-fit").onclick = () => (deck.open ? deck.resetView() : overview());
 
 // The sidebar folds away for a full-width map; conversations still open beside it.
 function setDock(collapsed, save = true) {
@@ -754,9 +797,12 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") e.target.blur();
     return;
   }
-  if (e.key === "Escape") { if (panel.id) panel.close(); else overview(); }
-  if (e.key === "+" || e.key === "=") map.zoomIn();
-  if (e.key === "-") map.zoomOut();
+  if (e.key === "Escape") { if (panel.id) panel.close(); else if (deck.card) deck.closeCard(); else overview(); }
+  if (deck.open && (e.key === "j" || e.key === "k")) deck.cycle(e.key === "j" ? 1 : -1);
+  if (deck.open && e.key === "f" && deck.card) deck.openFull();
+  if (e.key === "+" || e.key === "=") deck.open ? deck.zoomIn() : map.zoomIn();
+  if (e.key === "-") deck.open ? deck.zoomOut() : map.zoomOut();
+  if (e.key === "0" && deck.open) deck.resetView();
   if (e.key === "/") (e.preventDefault(), $("#ask").focus());
   if (e.key === "]") $("#dock-toggle").click();
 });

@@ -859,11 +859,19 @@ export function createMap(stage, handlers) {
     pulses.length = 0;
   });
 
+  // Where a node sits on screen, in stage pixels (the deck dives from here).
+  function screenPos(key) {
+    const p = nodes.get(key)?.cur ?? layout.pos.get(key);
+    if (!p) return null;
+    return { x: cam.x + p.x * cam.k, y: cam.y + p.y * cam.k };
+  }
+
   return {
     update,
     pulse,
     fit: () => fit(true),
     focusOn,
+    screenPos,
     zoomIn: () => zoomBy(1.25),
     zoomOut: () => zoomBy(0.8),
   };

@@ -1,0 +1,196 @@
+/* Mission deck: a project's team as a live control deck (project focus view). */
+
+.map { transform-origin: 50% 50%; }
+.stage.deck-on .map { pointer-events: none; }
+.stage .legend, .stage .zoom, .stage .team-prompt { transition: opacity .3s; }
+.stage.deck-on .legend, .stage.deck-on .team-prompt { opacity: 0; pointer-events: none; }
+.stage.deck-on .zoom { z-index: 4; bottom: calc(var(--rec-h, 0px) + 14px); transition: bottom .4s var(--ease); }
+.stage.deck-on .composer { bottom: calc(var(--rec-h, 0px) + 14px); transition: bottom .4s var(--ease), opacity .2s, border-color .2s, box-shadow .2s; }
+/* The card has its own reply box; the team composer steps aside while it's open. */
+.stage.deck-card .composer { opacity: 0; pointer-events: none; }
+
+.deck { position: absolute; inset: 0; z-index: 2; visibility: hidden; pointer-events: none; overflow: hidden; }
+.deck.on { visibility: visible; pointer-events: auto; cursor: grab; }
+.deck.dk-grabbing { cursor: grabbing; }
+.dk-world.dk-free { transition: none; }
+.dk-cam { position: absolute; inset: 0; }
+.dk-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; transition: transform .45s var(--ease); }
+.dk-sweep { position: absolute; left: -340px; top: -340px; width: 680px; height: 680px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 0deg, color-mix(in srgb, var(--blue) 6%, transparent), transparent 42deg),
+              radial-gradient(circle, color-mix(in srgb, var(--blue) 8%, transparent), transparent 70%);
+  -webkit-mask: radial-gradient(circle, #000 0 69%, transparent 70%); mask: radial-gradient(circle, #000 0 69%, transparent 70%);
+  animation: spin 9s linear infinite; }
+.dk-svg { position: absolute; left: -2000px; top: -2000px; overflow: visible; pointer-events: none; }
+.dk-ring { fill: none; stroke: var(--line-2); stroke-dasharray: 2 6; transform-box: view-box; transform-origin: 2000px 2000px; }
+.dk-edge { fill: none; stroke: var(--wire); stroke-width: 1.2; stroke-opacity: .7; transition: stroke .3s; }
+.dk-edge.st-working, .dk-edge.st-waiting { stroke: var(--blue); stroke-width: 1.7; stroke-opacity: .6; }
+.dk-edge.st-needs { stroke: var(--amber); stroke-width: 1.7; stroke-opacity: .7; }
+.dk-edge.st-failed { stroke: var(--red); stroke-width: 1.5; stroke-opacity: .6; }
+.dk-edge.st-reported { stroke: var(--green); stroke-opacity: .4; }
+.dk-edge.st-idle { stroke-dasharray: 3 5; stroke-opacity: .35; }
+.dk-escal { fill: none; stroke: var(--amber); stroke-width: 1.5; stroke-dasharray: 3 4; animation: dk-march .8s linear infinite; }
+@keyframes dk-march { to { stroke-dashoffset: -14; } }
+.pk.call { fill: var(--blue); }
+.pk.answer { fill: var(--green); }
+.pulse-dot { filter: drop-shadow(0 0 6px currentColor); }
+.pulse-dot.call { fill: var(--blue); color: var(--blue); }
+.pulse-dot.answer { fill: var(--green); color: var(--green); }
+.pulse-dot.needs { fill: var(--amber); color: var(--amber); }
+.pulse-dot.failed { fill: var(--red); color: var(--red); }
+
+.dk-secs span { position: absolute; transform: translate(-50%, -50%); font: 600 9.5px var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--faint); white-space: nowrap; pointer-events: none; }
+.dk-secs [data-sec=up] { left: 0; top: -84px; }
+.dk-secs [data-sec=down] { left: 0; top: 96px; }
+.dk-secs [data-sec=right] { left: 128px; top: 0; }
+.dk-secs [data-sec=left] { left: -128px; top: 0; }
+
+.dk-beacon { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 7px; font: 600 10.5px var(--mono); color: var(--amber); white-space: nowrap; border-radius: 999px; }
+.dk-beacon i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 700 8.5px var(--font); font-style: normal; text-transform: uppercase; color: #fff;
+  background: radial-gradient(circle at 50% 30%, var(--you-a), var(--you-b)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 20%, transparent); }
+
+.dk-hub { position: absolute; left: -46px; top: -46px; width: 92px; height: 92px; border-radius: 50%; padding: 0; display: grid; place-items: center; align-content: center; gap: 1px;
+  border: 1.5px solid color-mix(in srgb, var(--you-a) 55%, transparent); color: var(--text);
+  background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--you-a) 18%, var(--panel)), var(--panel));
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--blue) 6%, transparent), 0 0 44px color-mix(in srgb, var(--blue) 18%, transparent); transition: opacity .3s, box-shadow .2s, border-color .2s; }
+.dk-hub:hover, .dk-hub.hl { border-color: var(--you-a); }
+.dk-hub.sel { box-shadow: 0 0 0 5px color-mix(in srgb, var(--you-a) 28%, transparent), 0 0 44px color-mix(in srgb, var(--blue) 30%, transparent); }
+.dk-hub-ring { position: absolute; inset: -6px; border-radius: 50%; border: 2px solid transparent; pointer-events: none; }
+.dk-hub.st-working .dk-hub-ring, .dk-hub.st-waiting .dk-hub-ring { border-top-color: var(--blue); animation: spin 1.6s linear infinite; }
+.dk-hub.st-needs .dk-hub-ring { border-color: var(--amber); animation: dk-pulse 2.2s ease-out infinite; }
+.dk-hub.st-failed .dk-hub-ring { border-color: var(--red); }
+.dk-hub.st-none { border-style: dashed; }
+.dk-hub-mono { font-size: 21px; font-weight: 720; color: var(--hue, var(--you-a)); letter-spacing: -.02em; line-height: 1; }
+.dk-hub-role { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--muted); }
+.dk-hub-badge { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 10.5px; font-weight: 560; padding: 1px 9px; border-radius: 999px;
+  color: var(--blue); background: var(--blue-soft); border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent); }
+.dk-hub.st-needs .dk-hub-badge { color: var(--amber); background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 35%, transparent); }
+.dk-hub.st-failed .dk-hub-badge { color: var(--red); background: var(--red-soft); border-color: color-mix(in srgb, var(--red) 35%, transparent); }
+.dk-hub.st-reported .dk-hub-badge { color: var(--green); background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, transparent); }
+.dk-hub.st-idle .dk-hub-badge, .dk-hub.st-none .dk-hub-badge { color: var(--muted); background: var(--hover); border-color: var(--line); }
+@keyframes dk-pulse { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.25); opacity: 0; } }
+
+.dk-pod { position: absolute; width: 214px; height: 60px; display: grid; grid-template-columns: 32px 1fr; gap: 9px; align-items: center; padding: 7px 11px 7px 8px; text-align: left;
+  border-radius: 12px; border: 1px solid var(--line-2); color: var(--text); background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(6px);
+  box-shadow: var(--shadow); transition: left .5s var(--ease), top .5s var(--ease), opacity .3s, border-color .2s, box-shadow .2s; }
+.dk-pod:hover { border-color: color-mix(in srgb, var(--text) 30%, transparent); }
+.dk-pod-text { min-width: 0; display: grid; gap: 2px; }
+.dk-pod-text b { font-size: 12px; font-weight: 610; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.dk-pod-text small { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dk-pod.st-needs { border-color: color-mix(in srgb, var(--amber) 55%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--amber) 8%, transparent), 0 0 28px color-mix(in srgb, var(--amber) 14%, transparent); }
+.dk-pod.st-needs::after { content: ""; position: absolute; inset: -6px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--amber) 50%, transparent); animation: dk-pulse 2.2s ease-out infinite; pointer-events: none; }
+.dk-pod.st-failed { border-color: color-mix(in srgb, var(--red) 50%, transparent); }
+.dk-pod.st-reported { border-color: color-mix(in srgb, var(--green) 38%, transparent); }
+.dk-pod.st-reported .dk-pod-text b::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--green); vertical-align: middle; }
+.dk-pod.st-idle { opacity: .55; }
+.dk-pod.st-idle:hover { opacity: .9; }
+.dk-pod.sub { border-style: dashed; }
+.dk-pod.hl { border-color: var(--you-a); box-shadow: 0 0 0 3px color-mix(in srgb, var(--you-a) 22%, transparent); }
+.dk-pod.sel { border-color: var(--you-a); box-shadow: 0 0 0 4px color-mix(in srgb, var(--you-a) 28%, transparent), 0 0 30px color-mix(in srgb, var(--you-a) 26%, transparent); opacity: 1; }
+.deck.inspecting .dk-pod:not(.sel), .deck.inspecting .dk-hub:not(.sel) { opacity: .3; }
+.dk-ring-svg { width: 32px; height: 32px; overflow: visible; }
+.dk-ring-svg .track { fill: none; stroke: var(--line-2); stroke-width: 3; }
+.dk-ring-svg .arc { fill: none; stroke-width: 3; stroke-linecap: round; stroke: var(--muted); }
+.dk-ring-svg .arc.spin { animation: spin 1.4s linear infinite; transform-origin: 0 0; }
+.dk-ring-svg .mark { font: 700 11px var(--mono); text-anchor: middle; fill: var(--muted); }
+.dk-ring-svg .mark.small { font-size: 8.5px; }
+.dk-ring-svg .g { color: var(--muted); }
+.st-working .arc, .st-waiting .arc { stroke: var(--blue); }
+.st-working .mark, .st-waiting .mark, .st-working .g, .st-waiting .g { fill: var(--blue); color: var(--blue); }
+.st-needs .arc { stroke: var(--amber); }
+.st-needs .mark { fill: var(--amber); }
+.st-failed .arc { stroke: var(--red); }
+.st-failed .mark { fill: var(--red); }
+.st-reported .arc { stroke: var(--green); }
+.st-reported .mark { fill: var(--green); }
+
+.ping-call, .ping-answer, .ping-needs, .ping-failed, .ping-work { animation: dk-flash .9s var(--ease); }
+.ping-call { --flash: var(--blue); }
+.ping-answer { --flash: var(--green); }
+.ping-needs { --flash: var(--amber); }
+.ping-failed { --flash: var(--red); }
+.ping-work { --flash: color-mix(in srgb, var(--blue) 50%, transparent); }
+@keyframes dk-flash { 0% { box-shadow: 0 0 0 0 var(--flash); } 100% { box-shadow: 0 0 0 14px transparent; } }
+
+.dk-empty { position: absolute; left: 0; top: 150px; transform: translateX(-50%); text-align: center; color: var(--faint); font-size: 12px; white-space: nowrap; }
+
+.dk-hud { position: absolute; left: 18px; top: 14px; display: grid; gap: 4px; z-index: 3; transform: scale(var(--dk-ui, 1)); transform-origin: 0 0; }
+.dk-back { justify-self: start; display: inline-flex; align-items: center; gap: 7px; padding: 2px 6px 2px 2px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 11.5px; }
+.dk-back:hover { color: var(--text); }
+.dk-back kbd, .dk-card kbd { font: 9.5px var(--mono); padding: 0 4px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; color: var(--faint); }
+.dk-name { display: flex; align-items: center; gap: 9px; font-size: 21px; font-weight: 680; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.dk-name i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.dk-stats { display: flex; gap: 12px; font: 11.5px var(--mono); color: var(--muted); }
+.dk-stats b { font-weight: 650; }
+.dk-stats .needs { color: var(--amber); }
+.dk-stats .failed { color: var(--red); }
+.dk-stats .working { color: var(--blue); }
+.dk-stats .reported { color: var(--green); }
+.dk-clock { position: absolute; right: 18px; top: 14px; transform: scale(var(--dk-ui, 1)); transform-origin: 100% 0; display: grid; justify-items: end; gap: 1px; z-index: 3; font: 10.5px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+.dk-clock b { font-size: 16px; font-weight: 520; color: var(--text); letter-spacing: .05em; }
+
+.dk-card { position: absolute; z-index: 5; transform-origin: 0 0; display: flex; flex-direction: column; max-height: calc(100% - 80px); overflow: hidden; border-radius: 14px;
+  background: var(--panel); border: 1px solid color-mix(in srgb, var(--you-a) 38%, transparent); box-shadow: 0 24px 64px -16px rgba(0, 0, 0, .75), 0 0 0 1px rgba(0, 0, 0, .3); }
+.dk-ghost { position: fixed; z-index: 30; overflow: hidden; pointer-events: none; background: var(--panel); border: 1px solid color-mix(in srgb, var(--you-a) 38%, transparent); box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .8); }
+.dk-card-head { padding: 13px 15px 10px; border-bottom: 1px solid var(--line); }
+.dk-kicker { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.dk-card h3 { margin: 4px 0 8px; font-size: 15px; font-weight: 640; letter-spacing: -.015em; line-height: 1.3; }
+.dk-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.dk-chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; color: var(--muted); background: var(--hover); text-decoration: none; }
+.dk-chip.link { color: var(--blue); background: var(--blue-soft); }
+.dk-chip.pr { color: var(--blue); background: var(--blue-soft); }
+.dk-chip.pr.merged { color: #b48cff; background: color-mix(in srgb, #b48cff 13%, transparent); }
+.dk-chip.pr.closed { color: var(--muted); background: var(--hover); }
+.dk-chip.pr.draft { color: var(--muted); background: var(--hover); }
+.dk-chip.mono { font-family: var(--mono); font-size: 10.5px; }
+.dk-card-body { padding: 10px 15px; overflow: auto; min-height: 0; font-size: 12.5px; color: var(--text); }
+.dk-ask { border: 1px solid color-mix(in srgb, var(--amber) 38%, transparent); background: var(--amber-soft); border-radius: 9px; padding: 8px 10px; margin-bottom: 9px; line-height: 1.5; }
+.dk-ask small { display: block; font: 600 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--amber); margin-bottom: 2px; }
+.dk-ask pre { margin: 6px 0 0; font: 11px var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+.dk-ask.plan { border-color: color-mix(in srgb, var(--blue) 35%, transparent); background: var(--blue-soft); }
+.dk-ask.plan small { color: var(--blue); }
+.dk-tasks { list-style: none; margin: 0 0 9px; padding: 0; font-size: 11.5px; color: var(--muted); display: grid; gap: 2px; }
+.dk-tasks li { display: flex; gap: 7px; }
+.dk-tasks li i { font-style: normal; width: 12px; flex: none; }
+.dk-tasks li.completed { color: var(--faint); text-decoration: line-through; }
+.dk-tasks li.running { color: var(--blue); }
+.dk-answer.markdown { font-size: 12.5px; line-height: 1.6; max-height: 168px; overflow: hidden; -webkit-mask: linear-gradient(#000 75%, transparent); mask: linear-gradient(#000 75%, transparent); }
+.dk-answer.markdown p { margin: 0 0 8px; }
+.dk-card-note { margin: 0; color: var(--faint); }
+.dk-card-actions { display: flex; align-items: center; gap: 6px; padding: 9px 15px; border-top: 1px solid var(--line); }
+.dk-card-actions .sp { flex: 1; }
+.dk-card .pill-btn.amber { background: var(--amber); color: #111; }
+.dk-btn { height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--raise); color: var(--text); font-size: 11.5px; display: inline-flex; align-items: center; gap: 6px; }
+.dk-btn:hover { border-color: color-mix(in srgb, var(--text) 28%, transparent); }
+.dk-card-reply { display: flex; align-items: center; margin: 0 15px 13px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg); }
+.dk-card-reply:focus-within { border-color: color-mix(in srgb, var(--blue) 45%, var(--line-2)); }
+.dk-card-reply input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; padding: 8px 10px; font-size: 12.5px; }
+.dk-card-reply button { border: 0; background: none; color: var(--faint); padding: 0 10px; height: 30px; }
+
+.dk-rec { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 8px 18px; border-top: 1px solid var(--line);
+  background: linear-gradient(color-mix(in srgb, var(--panel) 70%, transparent), color-mix(in srgb, var(--bg) 92%, transparent)); backdrop-filter: blur(8px); }
+.dk-rec-in { max-width: calc(1400px * var(--dk-ui, 1)); margin: 0 auto; }
+.dk-rec .rh { display: grid; grid-template-columns: calc(210px * var(--dk-ui, 1)) 1fr; font: 600 calc(9.5px * var(--dk-ui, 1)) var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+.dk-rec .rh-x { display: flex; justify-content: space-between; }
+.dk-rec .rh-x .now { color: var(--you-a); }
+.dk-rec .lane { display: grid; grid-template-columns: calc(210px * var(--dk-ui, 1)) 1fr; align-items: center; height: calc(13px * var(--dk-ui, 1)); cursor: pointer; border-radius: 3px; }
+.dk-rec .ln { font-size: calc(10.5px * var(--dk-ui, 1)); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 12px; }
+.dk-rec .tr { position: relative; height: 100%; border-bottom: 1px dashed var(--line); }
+.dk-rec .lane:hover .ln, .dk-rec .lane.hl .ln { color: var(--text); }
+.dk-rec .lane:hover .tr, .dk-rec .lane.hl .tr { background: color-mix(in srgb, var(--you-a) 7%, transparent); }
+.dk-rec .bar { position: absolute; top: 4.5px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--blue) 35%, transparent); transform-origin: 0 50%; }
+.dk-rec .bar.live { background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 35%, transparent), var(--blue)); }
+.dk-rec .tick { position: absolute; top: 2px; width: 2px; height: 9px; margin-left: -1px; border-radius: 1px; }
+.dk-rec .lane-more { font-size: 10px; color: var(--faint); padding-top: 2px; }
+
+.dk-fx { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.dk-warp { position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at var(--wx, 50%) var(--wy, 45%), color-mix(in srgb, var(--you-a) 35%, transparent), color-mix(in srgb, var(--blue) 8%, transparent) 30%, transparent 60%); }
+.dk-streaks { position: absolute; width: 0; height: 0; opacity: 0; }
+.dk-streaks i { position: absolute; left: 0; top: 0; width: 280px; height: 1px; transform-origin: 0 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--you-a) 55%, transparent), transparent); }
+
+@media (max-width: 980px) {
+  .dk-clock { display: none; }
+  .dk-rec .rh, .dk-rec .lane { grid-template-columns: 110px 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-pod, .dk-world { transition: none; }
+}

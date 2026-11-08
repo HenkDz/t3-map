@@ -20,6 +20,7 @@ for (const name of [
   'server/images.mjs', 'server/model.mjs', 'server/thread.mjs',
   'web/index.html', 'web/styles.css', 'web/app.js', 'web/map.js', 'web/ui.js',
   'web/composer.js', 'web/thread.js', 'web/team.js', 'web/provider-logos.js',
+  'web/deck.js', 'web/deck.css',
   'package.json', 'THIRD_PARTY_NOTICES.md',
 ]) {
   await mkdir(dirname(join(resources, name)), { recursive: true });

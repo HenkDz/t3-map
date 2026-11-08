@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { deriveState, diffThread, isSettled, linkWidth, modelName, normalizeThread, providerName } from "../server/model.mjs";
+import { deriveState, diffThread, isSettled, linkWidth, modelName, normalizeThread, pickPullRequest, providerName } from "../server/model.mjs";
 import { STATE_LABEL } from "../web/ui.js";
 
 const base = {
@@ -143,4 +143,36 @@ test("names read like people would say them", () => {
   assert.equal(providerName("acpRegistry_deepseek_harness"), "Deepseek Harness");
   assert.equal(modelName({ model: '["openai-codex","gpt-6-luna"]' }), "gpt-6-luna");
   assert.equal(modelName({ model: "opencode-go/kimi-k3" }), "kimi-k3");
+});
+
+const pr = (number, state, updatedAt, extra = {}) => ({ repository: "o/r", number, url: `https://x/${number}`, linkedAt: updatedAt, snapshot: { state, isDraft: false, updatedAt }, ...extra });
+
+test("PRs carry T3's synced state instead of a guessed one", () => {
+  const out = pickPullRequest(t({ pullRequests: [pr(7, "merged", "2026-10-01T00:00:00Z")] }));
+  assert.deepEqual(out, { number: 7, url: "https://x/7", state: "merged", count: 1 });
+});
+
+test("an open PR wins over a long merged history", () => {
+  const list = [pr(1, "merged", "2026-10-01T00:00:00Z"), pr(2, "open", "2026-10-02T00:00:00Z"), pr(3, "merged", "2026-10-03T00:00:00Z")];
+  assert.equal(pickPullRequest(t({ pullRequests: list })).number, 2);
+  assert.equal(pickPullRequest(t({ pullRequests: list })).state, "open");
+});
+
+test("with only merged PRs, the newest one is shown, still marked merged", () => {
+  const list = [pr(1957, "merged", "2026-10-22T00:00:00Z"), pr(2096, "merged", "2026-10-30T00:00:00Z")];
+  assert.deepEqual(pickPullRequest(t({ pullRequests: list })), { number: 2096, url: "https://x/2096", state: "merged", count: 2 });
+});
+
+test("a branch PR without a snapshot takes its state from the synced list", () => {
+  const out = pickPullRequest(t({ branchPullRequest: { repository: "o/r", number: 9, url: "u" }, pullRequests: [pr(9, "merged", "2026-10-02T00:00:00Z")] }));
+  assert.equal(out.state, "merged");
+  const unknown = pickPullRequest(t({ branchPullRequest: { repository: "o/r", number: 4, url: "u" } }));
+  assert.deepEqual(unknown, { number: 4, url: "u", state: null, count: 0 });
+});
+
+test("drafts are told apart from open PRs", () => {
+  const draft = pr(5, "open", "2026-10-02T00:00:00Z");
+  draft.snapshot.isDraft = true;
+  assert.equal(pickPullRequest(t({ pullRequests: [draft] })).state, "draft");
+  assert.equal(normalizeThread(t({ pullRequests: [draft] })).pr.state, "draft");
 });
